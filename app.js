@@ -8,6 +8,7 @@ const { Engine, World, Bodies, Body, Common, Runner, Events, Query, Sleeping } =
 Common.setDecomp(window.decomp);
 
 const galleryWall = document.getElementById('galleryWall');
+const scene = document.getElementById('scene');
 const container = document.getElementById('windowContainer');
 const interior = document.getElementById('windowInterior');
 const canvas = document.getElementById('worldCanvas');
@@ -39,8 +40,14 @@ let quoteTapCount = 0;
 let quoteTapTimer = null;
 
 const MAX_TABS = 1500;
+const HOVER_STIFFNESS = 0.0014;
+const HOVER_DAMPING = 0.9;
 const LATCH_STIFFNESS = 0.0032;
 const QUOTE_TAP_WINDOW_MS = 500;
+
+const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+const motionAccess = { granted: false, requested: false };
+const tilt = { x: 0, y: 0, targetX: 0, targetY: 0, prevMag: 0 };
 
 const SPRITE_SIZE = 200;
 const characterSprite = document.createElement('canvas');
@@ -394,6 +401,60 @@ function findBodyAtPoint(point) {
     return hits.length ? hits[0] : null;
 }
 
+function findHoverBody() {
+    const directHit = findBodyAtPoint(pointer);
+    if (directHit) return directHit;
+
+    const reach = mascotRadius() * 1.2;
+    const region = {
+        min: { x: pointer.x - reach, y: pointer.y - reach },
+        max: { x: pointer.x + reach, y: pointer.y + reach }
+    };
+    const nearby = Query.region(bodiesList, region);
+    if (!nearby.length) return null;
+
+    let closest = null;
+    let closestDist = reach * reach;
+
+    for (let i = 0; i < nearby.length; i += 1) {
+        const body = nearby[i];
+        const dx = pointer.x - body.position.x;
+        const dy = pointer.y - body.position.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < closestDist) {
+            closestDist = distSq;
+            closest = body;
+        }
+    }
+
+    return closest;
+}
+
+function applyHoverForces() {
+    if (!pointer.active || latchedBody) return;
+
+    const hoverBody = findHoverBody();
+    if (!hoverBody) return;
+
+    Sleeping.set(hoverBody, false);
+
+    const dx = pointer.x - hoverBody.position.x;
+    const dy = pointer.y - hoverBody.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const falloff = Math.min(1, mascotRadius() * 1.1 / dist);
+
+    Body.applyForce(hoverBody, hoverBody.position, {
+        x: dx * HOVER_STIFFNESS * falloff,
+        y: dy * HOVER_STIFFNESS * falloff
+    });
+
+    Body.setVelocity(hoverBody, {
+        x: hoverBody.velocity.x * HOVER_DAMPING + pointer.vx * 0.06 * falloff,
+        y: hoverBody.velocity.y * HOVER_DAMPING + pointer.vy * 0.06 * falloff
+    });
+    Body.setAngularVelocity(hoverBody, hoverBody.angularVelocity * 0.94);
+}
+
 function applyLatchForces() {
     if (!latchedBody) return;
 
@@ -418,10 +479,114 @@ function setupLatchInteraction() {
     if (setupLatchInteraction.ready) return;
     setupLatchInteraction.ready = true;
     Events.on(engine, 'beforeUpdate', () => {
+        applyTiltGravity();
+        applyHoverForces();
         if (latchedBody) applyLatchForces();
     });
 }
 setupLatchInteraction.ready = false;
+
+async function enableDeviceMotion() {
+    if (motionAccess.granted) return true;
+    if (motionAccess.requested) return motionAccess.granted;
+    motionAccess.requested = true;
+
+    let granted = false;
+
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        try {
+            granted = (await DeviceMotionEvent.requestPermission()) === 'granted';
+        } catch {
+            granted = false;
+        }
+    }
+
+    if (!granted && typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            granted = (await DeviceOrientationEvent.requestPermission()) === 'granted';
+        } catch {
+            granted = false;
+        }
+    }
+
+    if (!granted && typeof DeviceOrientationEvent?.requestPermission !== 'function') {
+        granted = true;
+    }
+
+    motionAccess.granted = granted;
+    return motionAccess.granted;
+}
+
+function setTiltFromOrientation(beta, gamma) {
+    const normX = Math.min(Math.max(gamma, -42), 42) / 42;
+    const normY = Math.min(Math.max(beta - 45, -42), 42) / 42;
+    tilt.targetX = normX;
+    tilt.targetY = normY;
+
+    if (isTouchDevice) {
+        targetX = normX * 6;
+        targetY = -normY * 5;
+    } else {
+        targetX = normX * 16;
+        targetY = -normY * 12;
+    }
+}
+
+function setTiltFromAcceleration(ax, ay) {
+    if (ax == null || ay == null) return;
+    const normX = Math.min(Math.max(ax / 9.2, -1), 1);
+    const normY = Math.min(Math.max(ay / 9.2, -1), 1);
+    tilt.targetX = normX;
+    tilt.targetY = -normY;
+}
+
+function applyTiltGravity() {
+    const lerp = isTouchDevice ? 0.16 : 0.1;
+    tilt.x += (tilt.targetX - tilt.x) * lerp;
+    tilt.y += (tilt.targetY - tilt.y) * lerp;
+
+    const gxStrength = isTouchDevice ? 3.2 : 1.2;
+    const gyBase = isTouchDevice ? 0.95 : 1.15;
+
+    engine.gravity.x = tilt.x * gxStrength;
+    engine.gravity.y = Math.max(0.2, gyBase - Math.abs(tilt.x) * 0.3 + tilt.y * 1.05);
+
+    const tiltMag = Math.abs(tilt.x) + Math.abs(tilt.y);
+    if (isTouchDevice && tiltMag > 0.1) {
+        for (let i = 0; i < bodiesList.length; i += 1) {
+            Sleeping.set(bodiesList[i], false);
+        }
+    }
+    tilt.prevMag = tiltMag;
+}
+
+function bindMotionListeners() {
+    window.addEventListener('deviceorientation', (e) => {
+        if (!motionAccess.granted && typeof DeviceOrientationEvent?.requestPermission === 'function') return;
+        if (e.beta == null || e.gamma == null) return;
+        setTiltFromOrientation(e.beta, e.gamma);
+    }, true);
+
+    window.addEventListener('deviceorientationabsolute', (e) => {
+        if (!motionAccess.granted && typeof DeviceOrientationEvent?.requestPermission === 'function') return;
+        if (e.beta == null || e.gamma == null) return;
+        setTiltFromOrientation(e.beta, e.gamma);
+    }, true);
+
+    window.addEventListener('devicemotion', (e) => {
+        if (!motionAccess.granted && typeof DeviceMotionEvent?.requestPermission === 'function') return;
+        const g = e.accelerationIncludingGravity;
+        if (!g || g.x == null) return;
+        setTiltFromAcceleration(g.x, g.y);
+    }, true);
+}
+
+function initMotion() {
+    if (!isTouchDevice || typeof DeviceOrientationEvent?.requestPermission !== 'function') {
+        motionAccess.granted = true;
+    }
+    bindMotionListeners();
+}
 
 function updatePointerFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
@@ -541,15 +706,11 @@ window.addEventListener('mousemove', (e) => {
     targetY = -normY * 10;
 });
 
-window.addEventListener('deviceorientation', (e) => {
-    if (e.beta == null || e.gamma == null) return;
-    const normX = Math.min(Math.max(e.gamma, -28), 28) / 28;
-    const normY = Math.min(Math.max(e.beta - 48, -28), 28) / 28;
-    targetX = normX * 16;
-    targetY = -normY * 12;
-    engine.gravity.x = normX * 1.2;
-    engine.gravity.y = Math.max(0.55, 1.15 - Math.abs(normX) * 0.25 + normY * 0.25);
-}, true);
+scene.addEventListener('pointerdown', () => {
+    if (isTouchDevice) enableDeviceMotion();
+}, { passive: true });
+
+initMotion();
 
 canvas.addEventListener('pointermove', (e) => {
     if (isTextEditing) return;
@@ -562,7 +723,7 @@ canvas.addEventListener('pointermove', (e) => {
         canvas.style.cursor = 'text';
         return;
     }
-    canvas.style.cursor = 'default';
+    canvas.style.cursor = findHoverBody() ? 'grab' : 'default';
 });
 
 canvas.addEventListener('pointerleave', () => {
@@ -594,7 +755,7 @@ canvas.addEventListener('pointerup', (e) => {
 
     if (latchedBody) {
         releaseLatchedBody();
-        canvas.style.cursor = 'default';
+        canvas.style.cursor = findHoverBody() ? 'grab' : 'default';
         pointerDown.body = null;
         return;
     }
