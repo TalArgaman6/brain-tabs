@@ -4,17 +4,21 @@ if (typeof window !== 'undefined' && !window.decomp) {
     window.decomp = decomp;
 }
 
-const { Engine, World, Bodies, Body, Common, Mouse, MouseConstraint, Runner, Events, Query, Sleeping } = Matter;
+const { Engine, World, Bodies, Body, Common, Runner, Events, Query, Sleeping } = Matter;
 Common.setDecomp(window.decomp);
 
 const galleryWall = document.getElementById('galleryWall');
 const container = document.getElementById('windowContainer');
-const interior = document.querySelector('.window-interior');
+const interior = document.getElementById('windowInterior');
 const canvas = document.getElementById('worldCanvas');
 const bgText = document.getElementById('bgText');
 const addBtn = document.getElementById('addBtn');
 const removeBtn = document.getElementById('removeBtn');
 const countInput = document.getElementById('countInput');
+const editTextBtn = document.getElementById('editTextBtn');
+
+const DEFAULT_QUOTE = 'when your brain has too many tabs open';
+const TEXT_STORAGE_KEY = 'brain-tabs-quote';
 
 const engine = Engine.create({
     gravity: { x: 0, y: 1.15 }
@@ -27,16 +31,17 @@ let bodiesList = [];
 let ground;
 let leftWall;
 let rightWall;
-let mouseConstraint;
-let touchStartTime = 0;
-let touchMoved = false;
 let isCountEditing = false;
-const pointer = { x: 0, y: 0, active: false, pressed: false, vx: 0, vy: 0 };
-let hoverBody = null;
+let isTextEditing = false;
+const pointer = { x: 0, y: 0, active: false, vx: 0, vy: 0 };
+let latchedBody = null;
+let pointerDown = { x: 0, y: 0, body: null };
+let quoteTapCount = 0;
+let quoteTapTimer = null;
 
-const MAX_TABS = 500;
-const HOVER_STIFFNESS = 0.0018;
-const HOVER_DAMPING = 0.88;
+const MAX_TABS = 1000;
+const LATCH_STIFFNESS = 0.0032;
+const QUOTE_TAP_WINDOW_MS = 500;
 
 const SPRITE_SIZE = 200;
 const characterSprite = document.createElement('canvas');
@@ -183,7 +188,7 @@ function createMascotVertices(scale) {
 }
 
 function mascotRadius() {
-    return Math.max(18, Math.min(width * 0.058, 34));
+    return Math.max(15, Math.min(width * 0.05, 30));
 }
 
 function pickDuneSection() {
@@ -242,7 +247,7 @@ function removeMascot(syncCount = true) {
     if (!bodiesList.length) return;
     const body = bodiesList.pop();
     World.remove(engine.world, body);
-    if (hoverBody === body) hoverBody = null;
+    if (latchedBody === body) releaseLatchedBody();
     if (syncCount) updateBadge();
 }
 
@@ -266,94 +271,131 @@ function updateBadge() {
     }
 }
 
-function setupMouse() {
-    if (mouseConstraint) {
-        World.remove(engine.world, mouseConstraint);
-        mouseConstraint = null;
-    }
+function releaseLatchedBody() {
+    if (!latchedBody) return;
 
-    const mouse = Mouse.create(canvas, { element: canvas });
-    mouseConstraint = MouseConstraint.create(engine, {
-        mouse,
-        constraint: {
-            stiffness: 0.14,
-            damping: 0.08,
-            render: { visible: false }
-        }
+    Body.setVelocity(latchedBody, {
+        x: latchedBody.velocity.x + pointer.vx * 0.35,
+        y: latchedBody.velocity.y + pointer.vy * 0.35
     });
-
-    mouseConstraint.mouse.element.removeEventListener('mousewheel', mouseConstraint.mouse.mousewheel);
-    mouseConstraint.mouse.element.removeEventListener('DOMMouseScroll', mouseConstraint.mouse.mousewheel);
-
-    World.add(engine.world, mouseConstraint);
-
-    Events.on(mouseConstraint, 'startdrag', () => { touchMoved = true; });
-    Events.on(mouseConstraint, 'enddrag', () => {
-        setTimeout(() => { touchMoved = false; }, 80);
-    });
+    latchedBody = null;
 }
 
-function findHoverBody() {
-    const directHits = Query.point(bodiesList, pointer);
-    if (directHits.length) return directHits[0];
-
-    const reach = mascotRadius() * 1.35;
-    const region = {
-        min: { x: pointer.x - reach, y: pointer.y - reach },
-        max: { x: pointer.x + reach, y: pointer.y + reach }
-    };
-    const nearby = Query.region(bodiesList, region);
-    if (!nearby.length) return null;
-
-    let closest = null;
-    let closestDist = reach * reach;
-
-    for (let i = 0; i < nearby.length; i += 1) {
-        const body = nearby[i];
-        const dx = pointer.x - body.position.x;
-        const dy = pointer.y - body.position.y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < closestDist) {
-            closestDist = distSq;
-            closest = body;
+function loadSavedQuote() {
+    try {
+        const saved = localStorage.getItem(TEXT_STORAGE_KEY);
+        if (saved && saved.trim()) {
+            bgText.textContent = saved;
         }
+    } catch {
+        bgText.textContent = DEFAULT_QUOTE;
     }
-
-    return closest;
 }
 
-function applyHoverForces() {
-    if (!pointer.active || pointer.pressed || mouseConstraint?.body) {
-        hoverBody = null;
+function saveQuote() {
+    const text = bgText.textContent.trim() || DEFAULT_QUOTE;
+    bgText.textContent = text;
+    try {
+        localStorage.setItem(TEXT_STORAGE_KEY, text);
+    } catch {
+        // ignore storage failures
+    }
+}
+
+function startTextEdit() {
+    isTextEditing = true;
+    interior.classList.add('is-editing-text');
+    bgText.classList.add('is-editing');
+    bgText.focus();
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(bgText);
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
+
+function stopTextEdit() {
+    isTextEditing = false;
+    interior.classList.remove('is-editing-text');
+    bgText.classList.remove('is-editing');
+    bgText.classList.remove('is-primed');
+    resetQuoteTap();
+    saveQuote();
+    bgText.blur();
+}
+
+function resetQuoteTap() {
+    quoteTapCount = 0;
+    clearTimeout(quoteTapTimer);
+    quoteTapTimer = null;
+    bgText.classList.remove('is-primed');
+}
+
+function handleQuoteTap() {
+    quoteTapCount += 1;
+    clearTimeout(quoteTapTimer);
+
+    if (quoteTapCount >= 2) {
+        resetQuoteTap();
+        startTextEdit();
         return;
     }
 
-    hoverBody = findHoverBody();
-    if (!hoverBody) return;
-
-    Sleeping.set(hoverBody, false);
-
-    const dx = pointer.x - hoverBody.position.x;
-    const dy = pointer.y - hoverBody.position.y;
-
-    Body.applyForce(hoverBody, hoverBody.position, {
-        x: dx * HOVER_STIFFNESS,
-        y: dy * HOVER_STIFFNESS
-    });
-
-    Body.setVelocity(hoverBody, {
-        x: hoverBody.velocity.x * HOVER_DAMPING + pointer.vx * 0.08,
-        y: hoverBody.velocity.y * HOVER_DAMPING + pointer.vy * 0.08
-    });
-    Body.setAngularVelocity(hoverBody, hoverBody.angularVelocity * 0.92);
+    bgText.classList.add('is-primed');
+    quoteTapTimer = setTimeout(resetQuoteTap, QUOTE_TAP_WINDOW_MS);
 }
 
-function setupHoverInteraction() {
-    if (setupHoverInteraction.ready) return;
-    setupHoverInteraction.ready = true;
-    Events.on(engine, 'beforeUpdate', applyHoverForces);
+function isPointOnQuoteText(x, y) {
+    const textRect = bgText.getBoundingClientRect();
+    const interiorRect = interior.getBoundingClientRect();
+    const pad = 10;
+
+    const left = textRect.left - interiorRect.left - pad;
+    const top = textRect.top - interiorRect.top - pad;
+    const right = left + textRect.width + pad * 2;
+    const bottom = top + textRect.height + pad * 2;
+
+    return x >= left && x <= right && y >= top && y <= bottom;
 }
-setupHoverInteraction.ready = false;
+
+function setupMouse() {
+    // Interaction uses explicit tap-to-latch only; no MouseConstraint needed.
+}
+
+function findBodyAtPoint(point) {
+    const hits = Query.point(bodiesList, point);
+    return hits.length ? hits[0] : null;
+}
+
+function applyLatchForces() {
+    if (!latchedBody) return;
+
+    Sleeping.set(latchedBody, false);
+
+    const dx = pointer.x - latchedBody.position.x;
+    const dy = pointer.y - latchedBody.position.y;
+
+    Body.applyForce(latchedBody, latchedBody.position, {
+        x: dx * LATCH_STIFFNESS,
+        y: dy * LATCH_STIFFNESS
+    });
+
+    Body.setVelocity(latchedBody, {
+        x: latchedBody.velocity.x * 0.82 + pointer.vx * 0.22,
+        y: latchedBody.velocity.y * 0.82 + pointer.vy * 0.22
+    });
+    Body.setAngularVelocity(latchedBody, latchedBody.angularVelocity * 0.9);
+}
+
+function setupLatchInteraction() {
+    if (setupLatchInteraction.ready) return;
+    setupLatchInteraction.ready = true;
+    Events.on(engine, 'beforeUpdate', () => {
+        if (latchedBody) applyLatchForces();
+    });
+}
+setupLatchInteraction.ready = false;
 
 function updatePointerFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
@@ -391,7 +433,7 @@ function initPhysics() {
     }
 
     setupMouse();
-    setupHoverInteraction();
+    setupLatchInteraction();
     updateBadge();
 }
 
@@ -411,10 +453,6 @@ function updateCanvasSize() {
         Body.setPosition(ground, { x: width / 2, y: height + wallThickness / 2 - 4 });
         Body.setPosition(leftWall, { x: -wallThickness / 2, y: height / 2 });
         Body.setPosition(rightWall, { x: width + wallThickness / 2, y: height / 2 });
-    }
-
-    if (mouseConstraint) {
-        setupMouse();
     }
 }
 
@@ -473,38 +511,70 @@ window.addEventListener('deviceorientation', (e) => {
 }, true);
 
 canvas.addEventListener('pointermove', (e) => {
+    if (isTextEditing) return;
     updatePointerFromEvent(e);
-    canvas.style.cursor = (!pointer.pressed && findHoverBody()) ? 'grab' : 'default';
+    if (latchedBody) {
+        canvas.style.cursor = 'grabbing';
+        return;
+    }
+    if (isPointOnQuoteText(pointer.x, pointer.y)) {
+        canvas.style.cursor = 'text';
+        return;
+    }
+    canvas.style.cursor = 'default';
 });
 
 canvas.addEventListener('pointerleave', () => {
     pointer.active = false;
     pointer.vx = 0;
     pointer.vy = 0;
-    hoverBody = null;
+    if (latchedBody) releaseLatchedBody();
     canvas.style.cursor = 'default';
 });
 
 canvas.addEventListener('pointerdown', (e) => {
-    pointer.pressed = true;
-    touchStartTime = performance.now();
-    touchMoved = false;
+    if (isTextEditing) return;
+
+    const rect = canvas.getBoundingClientRect();
+    pointerDown.x = e.clientX - rect.left;
+    pointerDown.y = e.clientY - rect.top;
+    pointerDown.body = findBodyAtPoint({ x: pointerDown.x, y: pointerDown.y });
     updatePointerFromEvent(e);
-    canvas.style.cursor = 'grabbing';
 });
 
 canvas.addEventListener('pointerup', (e) => {
-    pointer.pressed = false;
-    canvas.style.cursor = findHoverBody() ? 'grab' : 'default';
-
+    if (isTextEditing) return;
     if (e.target.closest('.controls-container')) return;
-    const elapsed = performance.now() - touchStartTime;
-    if (touchMoved || elapsed > 280) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    spawnMascot(x, y, mascotRadius());
+    const upX = e.clientX - rect.left;
+    const upY = e.clientY - rect.top;
+    updatePointerFromEvent(e);
+
+    if (latchedBody) {
+        releaseLatchedBody();
+        canvas.style.cursor = 'default';
+        pointerDown.body = null;
+        return;
+    }
+
+    if (pointerDown.body) {
+        resetQuoteTap();
+        latchedBody = pointerDown.body;
+        canvas.style.cursor = 'grabbing';
+        pointerDown.body = null;
+        return;
+    }
+
+    if (isPointOnQuoteText(upX, upY)) {
+        handleQuoteTap();
+        pointerDown.body = null;
+        return;
+    }
+
+    resetQuoteTap();
+    spawnMascot(upX, upY, mascotRadius());
+    pointerDown.body = null;
 });
 
 addBtn.addEventListener('click', (e) => {
@@ -539,6 +609,37 @@ countInput.addEventListener('change', () => {
     setTabCount(countInput.value);
 });
 
+editTextBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isTextEditing) {
+        stopTextEdit();
+    } else {
+        startTextEdit();
+    }
+});
+
+bgText.addEventListener('blur', () => {
+    if (isTextEditing) stopTextEdit();
+});
+
+bgText.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        stopTextEdit();
+    }
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        try {
+            const saved = localStorage.getItem(TEXT_STORAGE_KEY);
+            bgText.textContent = saved && saved.trim() ? saved : DEFAULT_QUOTE;
+        } catch {
+            bgText.textContent = DEFAULT_QUOTE;
+        }
+        stopTextEdit();
+    }
+});
+
 let resizeTimer;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
@@ -548,6 +649,7 @@ window.addEventListener('resize', () => {
 });
 
 preRenderMascot();
+loadSavedQuote();
 updateCanvasSize();
 initPhysics();
 

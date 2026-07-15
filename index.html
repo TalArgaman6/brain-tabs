@@ -21,8 +21,16 @@
 
             <div class="window-frame" id="windowFrame">
                 <div class="window-container" id="windowContainer">
-                    <div class="window-interior">
-                        <div class="bg-text" id="bgText">when your brain has too many tabs open</div>
+                    <div class="window-interior" id="windowInterior">
+                        <div
+                            class="bg-text"
+                            id="bgText"
+                            contenteditable="true"
+                            spellcheck="false"
+                            role="textbox"
+                            aria-label="Installation quote"
+                            data-placeholder="when your brain has too many tabs open"
+                        >when your brain has too many tabs open</div>
                         <canvas id="worldCanvas"></canvas>
                     </div>
                     <div class="glass-pane glass-pane--left" aria-hidden="true"></div>
@@ -43,18 +51,19 @@
                         id="countInput"
                         class="count-input"
                         min="0"
-                        max="500"
+                        max="1000"
                         value="0"
                         inputmode="numeric"
                         aria-label="Number of tabs"
                     >
                     <span class="count-suffix">tabs</span>
                 </label>
+                <button class="control-btn control-btn--text" id="editTextBtn" type="button" aria-label="Edit quote" title="Edit quote">Aa</button>
                 <button class="control-btn" id="addBtn" type="button" aria-label="Add tab">+</button>
             </div>
         </div>
 
-        <p class="instructions">Hover or drag to move the figures · Type a number to set tabs · Tilt your phone for perspective</p>
+        <p class="instructions">Double-tap the quote to edit · Tap a star to pick it up, tap anywhere to drop · Tap empty space to add a star</p>
     </main>
 
     <script src="app.js"></script>
