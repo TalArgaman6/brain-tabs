@@ -641,7 +641,7 @@ function seedMascots(count) {
 }
 
 function getDefaultMascotCount() {
-    const isMobile = window.matchMedia('(max-width: 600px)').matches;
+    const isMobile = window.matchMedia('(max-width: 900px)').matches;
     return isMobile ? 120 : width < 900 ? 140 : 185;
 }
 
@@ -737,10 +737,9 @@ let targetY = 0;
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function animateParallax() {
-    const isMobile = window.matchMedia('(max-width: 600px)').matches;
-    const isLandscapeMobile = window.matchMedia('(max-width: 900px) and (orientation: landscape)').matches;
+    const isMobile = window.matchMedia('(max-width: 900px)').matches;
 
-    if (!prefersReducedMotion && !isMobile && !isLandscapeMobile) {
+    if (!prefersReducedMotion && !isMobile) {
         currentX += (targetX - currentX) * 0.07;
         currentY += (targetY - currentY) * 0.07;
         galleryWall.style.transform = `rotateY(${currentX}deg) rotateX(${currentY}deg)`;

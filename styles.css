@@ -8,7 +8,9 @@
 
 html,
 body {
+    width: 100%;
     height: 100%;
+    overflow: hidden;
 }
 
 body {
@@ -320,18 +322,27 @@ body {
     }
 }
 
-/* Mobile — fullscreen horizontal frame, no wall */
-@media (max-width: 600px) {
+/* Mobile — fullscreen edge-to-edge with gray frame border */
+@media (max-width: 900px) {
     body {
         padding: 0;
+        margin: 0;
         align-items: stretch;
-        background: #fafafa;
+        background: #d6d6d6;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        min-height: 100vh;
+        min-height: 100dvh;
     }
 
     .scene {
         width: 100vw;
         height: 100vh;
         height: 100dvh;
+        min-width: 100vw;
+        min-height: 100vh;
+        min-height: 100dvh;
         max-width: none;
         gap: 0;
         perspective: none;
@@ -341,11 +352,15 @@ body {
         width: 100vw;
         height: 100vh;
         height: 100dvh;
+        min-width: 100vw;
+        min-height: 100vh;
+        min-height: 100dvh;
         max-height: none;
         aspect-ratio: unset;
         padding: 0;
+        margin: 0;
         border: none;
-        background: #fafafa;
+        background: transparent;
         box-shadow: none;
         border-radius: 0;
         transform: none !important;
@@ -365,23 +380,30 @@ body {
     }
 
     .window-container {
-        width: 100%;
-        height: 100%;
+        --mobile-frame: clamp(8px, 1.8vw, 12px);
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
         aspect-ratio: unset;
         min-height: 0;
         border: none;
-        background: #fafafa;
-        box-shadow: none;
+        border-radius: 0;
+        background: linear-gradient(180deg, #d0d0d0 0%, #e4e4e4 52%, #d8d8d8 100%);
+        box-shadow:
+            inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+            inset 0 18px 36px rgba(0, 0, 0, 0.12),
+            inset 0 -10px 20px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
     }
 
     .window-interior {
-        inset: 0;
+        inset: var(--mobile-frame);
         background: #fafafa;
-        box-shadow: none;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
     }
 
     .bg-text {
-        font-size: clamp(0.85rem, 4.2vw, 1.25rem);
+        font-size: clamp(0.85rem, 4vw, 1.35rem);
         top: 38%;
         max-width: 92%;
         white-space: normal;
@@ -390,7 +412,7 @@ body {
     .controls-container {
         left: 50%;
         right: auto;
-        bottom: max(12px, env(safe-area-inset-bottom));
+        bottom: max(14px, calc(env(safe-area-inset-bottom) + 10px));
         transform: translateX(-50%);
         padding: 6px 12px;
     }
@@ -402,63 +424,17 @@ body {
     }
 }
 
-/* Mobile landscape — maximize wide frame */
 @media (max-width: 900px) and (orientation: landscape) {
-    body {
-        padding: 0;
-        background: #fafafa;
-    }
-
-    .scene {
-        width: 100vw;
-        height: 100vh;
-        height: 100dvh;
-    }
-
-    .architectural-wall {
-        width: 100vw;
-        height: 100vh;
-        height: 100dvh;
-        max-height: none;
-        aspect-ratio: unset;
-        padding: 0;
-        border: none;
-        background: #fafafa;
-        box-shadow: none;
-        transform: none !important;
-    }
-
-    .wall-panel,
-    .window-sill,
-    .glass-pane,
-    .glass-shine {
-        display: none;
-    }
-
-    .window-frame,
-    .window-container {
-        width: 100%;
-        height: 100%;
-        aspect-ratio: unset;
-        min-height: 0;
-        border: none;
-        background: #fafafa;
-        box-shadow: none;
-        transform: none;
-    }
-
-    .window-interior {
-        inset: 0;
-    }
-
     .bg-text {
-        font-size: clamp(1rem, 3.5vw, 1.6rem);
+        font-size: clamp(0.95rem, 3.2vw, 1.5rem);
         top: 40%;
     }
 
     .controls-container {
-        bottom: max(10px, env(safe-area-inset-right));
+        left: auto;
         right: max(12px, env(safe-area-inset-right));
+        bottom: max(10px, env(safe-area-inset-bottom));
+        transform: none;
     }
 }
 
