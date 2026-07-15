@@ -37,12 +37,24 @@
 
             <div class="controls-container">
                 <button class="control-btn control-btn--minus" id="removeBtn" type="button" aria-label="Remove tab">−</button>
-                <div class="count-badge" id="countDisplay">0 tabs</div>
+                <label class="count-field" for="countInput">
+                    <input
+                        type="number"
+                        id="countInput"
+                        class="count-input"
+                        min="0"
+                        max="500"
+                        value="0"
+                        inputmode="numeric"
+                        aria-label="Number of tabs"
+                    >
+                    <span class="count-suffix">tabs</span>
+                </label>
                 <button class="control-btn" id="addBtn" type="button" aria-label="Add tab">+</button>
             </div>
         </div>
 
-        <p class="instructions">Drag the figures to toss them around · Tilt your phone for perspective</p>
+        <p class="instructions">Hover or drag to move the figures · Type a number to set tabs · Tilt your phone for perspective</p>
     </main>
 
     <script src="app.js"></script>

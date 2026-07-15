@@ -123,11 +123,7 @@ body {
     height: 100%;
     z-index: 5;
     touch-action: none;
-    cursor: grab;
-}
-
-#worldCanvas:active {
-    cursor: grabbing;
+    cursor: default;
 }
 
 /* Glass pane seams */
@@ -226,13 +222,47 @@ body {
     background: #e6e6e6;
 }
 
-.count-badge {
-    min-width: 72px;
-    text-align: center;
+.count-field {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 88px;
+    justify-content: center;
+    cursor: text;
+}
+
+.count-input {
+    width: 3.2em;
+    border: none;
+    background: transparent;
+    font-family: inherit;
     font-size: clamp(0.78rem, 1.8vw, 0.92rem);
     font-weight: 700;
     color: #222;
     letter-spacing: -0.01em;
+    text-align: right;
+    padding: 2px 0;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.count-input::-webkit-outer-spin-button,
+.count-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.count-input:focus {
+    outline: none;
+    border-bottom: 2px solid #f5c842;
+}
+
+.count-suffix {
+    font-size: clamp(0.78rem, 1.8vw, 0.92rem);
+    font-weight: 700;
+    color: #222;
+    letter-spacing: -0.01em;
+    user-select: none;
 }
 
 .instructions {

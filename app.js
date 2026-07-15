@@ -4,7 +4,7 @@ if (typeof window !== 'undefined' && !window.decomp) {
     window.decomp = decomp;
 }
 
-const { Engine, World, Bodies, Body, Common, Mouse, MouseConstraint, Runner, Events } = Matter;
+const { Engine, World, Bodies, Body, Common, Mouse, MouseConstraint, Runner, Events, Query, Sleeping } = Matter;
 Common.setDecomp(window.decomp);
 
 const galleryWall = document.getElementById('galleryWall');
@@ -14,7 +14,7 @@ const canvas = document.getElementById('worldCanvas');
 const bgText = document.getElementById('bgText');
 const addBtn = document.getElementById('addBtn');
 const removeBtn = document.getElementById('removeBtn');
-const countDisplay = document.getElementById('countDisplay');
+const countInput = document.getElementById('countInput');
 
 const engine = Engine.create({
     gravity: { x: 0, y: 1.15 }
@@ -30,6 +30,13 @@ let rightWall;
 let mouseConstraint;
 let touchStartTime = 0;
 let touchMoved = false;
+let isCountEditing = false;
+const pointer = { x: 0, y: 0, active: false, pressed: false, vx: 0, vy: 0 };
+let hoverBody = null;
+
+const MAX_TABS = 500;
+const HOVER_STIFFNESS = 0.0018;
+const HOVER_DAMPING = 0.88;
 
 const SPRITE_SIZE = 200;
 const characterSprite = document.createElement('canvas');
@@ -189,7 +196,7 @@ function pickDuneSection() {
     return DUNE_PROFILE[0];
 }
 
-function spawnMascot(x, y, radius, angle = Math.random() * Math.PI * 2) {
+function spawnMascot(x, y, radius, angle = Math.random() * Math.PI * 2, syncCount = true) {
     const vertices = createMascotVertices(radius);
     const body = Bodies.fromVertices(x, y, [vertices], {
         restitution: 0.04,
@@ -205,7 +212,7 @@ function spawnMascot(x, y, radius, angle = Math.random() * Math.PI * 2) {
     body.customRadius = radius;
     World.add(engine.world, body);
     bodiesList.push(body);
-    updateBadge();
+    if (syncCount) updateBadge();
     return body;
 }
 
@@ -225,21 +232,38 @@ function spawnDuneMascot() {
     );
 }
 
-function spawnFromTop() {
+function spawnFromTop(syncCount = true) {
     const radius = mascotRadius();
     const x = radius + Math.random() * (width - radius * 2);
-    return spawnMascot(x, -radius - Math.random() * 80, radius);
+    return spawnMascot(x, -radius - Math.random() * 80, radius, Math.random() * Math.PI * 2, syncCount);
 }
 
-function removeMascot() {
+function removeMascot(syncCount = true) {
     if (!bodiesList.length) return;
     const body = bodiesList.pop();
     World.remove(engine.world, body);
+    if (hoverBody === body) hoverBody = null;
+    if (syncCount) updateBadge();
+}
+
+function setTabCount(target) {
+    const clamped = Math.max(0, Math.min(MAX_TABS, Math.round(Number(target) || 0)));
+
+    while (bodiesList.length < clamped) {
+        spawnFromTop(false);
+    }
+    while (bodiesList.length > clamped) {
+        removeMascot(false);
+    }
+
     updateBadge();
+    return clamped;
 }
 
 function updateBadge() {
-    countDisplay.textContent = `${bodiesList.length} tabs`;
+    if (!isCountEditing) {
+        countInput.value = String(bodiesList.length);
+    }
 }
 
 function setupMouse() {
@@ -269,6 +293,79 @@ function setupMouse() {
     });
 }
 
+function findHoverBody() {
+    const directHits = Query.point(bodiesList, pointer);
+    if (directHits.length) return directHits[0];
+
+    const reach = mascotRadius() * 1.35;
+    const region = {
+        min: { x: pointer.x - reach, y: pointer.y - reach },
+        max: { x: pointer.x + reach, y: pointer.y + reach }
+    };
+    const nearby = Query.region(bodiesList, region);
+    if (!nearby.length) return null;
+
+    let closest = null;
+    let closestDist = reach * reach;
+
+    for (let i = 0; i < nearby.length; i += 1) {
+        const body = nearby[i];
+        const dx = pointer.x - body.position.x;
+        const dy = pointer.y - body.position.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < closestDist) {
+            closestDist = distSq;
+            closest = body;
+        }
+    }
+
+    return closest;
+}
+
+function applyHoverForces() {
+    if (!pointer.active || pointer.pressed || mouseConstraint?.body) {
+        hoverBody = null;
+        return;
+    }
+
+    hoverBody = findHoverBody();
+    if (!hoverBody) return;
+
+    Sleeping.set(hoverBody, false);
+
+    const dx = pointer.x - hoverBody.position.x;
+    const dy = pointer.y - hoverBody.position.y;
+
+    Body.applyForce(hoverBody, hoverBody.position, {
+        x: dx * HOVER_STIFFNESS,
+        y: dy * HOVER_STIFFNESS
+    });
+
+    Body.setVelocity(hoverBody, {
+        x: hoverBody.velocity.x * HOVER_DAMPING + pointer.vx * 0.08,
+        y: hoverBody.velocity.y * HOVER_DAMPING + pointer.vy * 0.08
+    });
+    Body.setAngularVelocity(hoverBody, hoverBody.angularVelocity * 0.92);
+}
+
+function setupHoverInteraction() {
+    if (setupHoverInteraction.ready) return;
+    setupHoverInteraction.ready = true;
+    Events.on(engine, 'beforeUpdate', applyHoverForces);
+}
+setupHoverInteraction.ready = false;
+
+function updatePointerFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const nextX = e.clientX - rect.left;
+    const nextY = e.clientY - rect.top;
+    pointer.vx = nextX - pointer.x;
+    pointer.vy = nextY - pointer.y;
+    pointer.x = nextX;
+    pointer.y = nextY;
+    pointer.active = true;
+}
+
 function initPhysics() {
     World.clear(engine.world);
     engine.world.gravity = { x: 0, y: 1.15 };
@@ -294,6 +391,7 @@ function initPhysics() {
     }
 
     setupMouse();
+    setupHoverInteraction();
     updateBadge();
 }
 
@@ -374,12 +472,31 @@ window.addEventListener('deviceorientation', (e) => {
     engine.gravity.y = Math.max(0.55, 1.15 - Math.abs(normX) * 0.25 + normY * 0.25);
 }, true);
 
-canvas.addEventListener('pointerdown', () => {
+canvas.addEventListener('pointermove', (e) => {
+    updatePointerFromEvent(e);
+    canvas.style.cursor = (!pointer.pressed && findHoverBody()) ? 'grab' : 'default';
+});
+
+canvas.addEventListener('pointerleave', () => {
+    pointer.active = false;
+    pointer.vx = 0;
+    pointer.vy = 0;
+    hoverBody = null;
+    canvas.style.cursor = 'default';
+});
+
+canvas.addEventListener('pointerdown', (e) => {
+    pointer.pressed = true;
     touchStartTime = performance.now();
     touchMoved = false;
+    updatePointerFromEvent(e);
+    canvas.style.cursor = 'grabbing';
 });
 
 canvas.addEventListener('pointerup', (e) => {
+    pointer.pressed = false;
+    canvas.style.cursor = findHoverBody() ? 'grab' : 'default';
+
     if (e.target.closest('.controls-container')) return;
     const elapsed = performance.now() - touchStartTime;
     if (touchMoved || elapsed > 280) return;
@@ -398,6 +515,28 @@ addBtn.addEventListener('click', (e) => {
 removeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     removeMascot();
+});
+
+countInput.addEventListener('focus', () => {
+    isCountEditing = true;
+    countInput.select();
+});
+
+countInput.addEventListener('blur', () => {
+    isCountEditing = false;
+    setTabCount(countInput.value);
+});
+
+countInput.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        countInput.blur();
+    }
+});
+
+countInput.addEventListener('change', () => {
+    setTabCount(countInput.value);
 });
 
 let resizeTimer;
