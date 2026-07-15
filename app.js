@@ -18,7 +18,6 @@ const countInput = document.getElementById('countInput');
 const editTextBtn = document.getElementById('editTextBtn');
 
 const DEFAULT_QUOTE = 'when your brain has too many tabs open';
-const TEXT_STORAGE_KEY = 'brain-tabs-quote';
 
 const engine = Engine.create({
     gravity: { x: 0, y: 1.15 }
@@ -39,7 +38,7 @@ let pointerDown = { x: 0, y: 0, body: null };
 let quoteTapCount = 0;
 let quoteTapTimer = null;
 
-const MAX_TABS = 1000;
+const MAX_TABS = 1500;
 const LATCH_STIFFNESS = 0.0032;
 const QUOTE_TAP_WINDOW_MS = 500;
 
@@ -281,25 +280,13 @@ function releaseLatchedBody() {
     latchedBody = null;
 }
 
-function loadSavedQuote() {
-    try {
-        const saved = localStorage.getItem(TEXT_STORAGE_KEY);
-        if (saved && saved.trim()) {
-            bgText.textContent = saved;
-        }
-    } catch {
-        bgText.textContent = DEFAULT_QUOTE;
-    }
+function resetQuoteToDefault() {
+    bgText.textContent = DEFAULT_QUOTE;
 }
 
-function saveQuote() {
-    const text = bgText.textContent.trim() || DEFAULT_QUOTE;
-    bgText.textContent = text;
-    try {
-        localStorage.setItem(TEXT_STORAGE_KEY, text);
-    } catch {
-        // ignore storage failures
-    }
+function finalizeQuoteEdit() {
+    const text = bgText.textContent.trim();
+    bgText.textContent = text || DEFAULT_QUOTE;
 }
 
 function startTextEdit() {
@@ -321,7 +308,7 @@ function stopTextEdit() {
     bgText.classList.remove('is-editing');
     bgText.classList.remove('is-primed');
     resetQuoteTap();
-    saveQuote();
+    finalizeQuoteEdit();
     bgText.blur();
 }
 
@@ -630,12 +617,7 @@ bgText.addEventListener('keydown', (e) => {
     }
     if (e.key === 'Escape') {
         e.preventDefault();
-        try {
-            const saved = localStorage.getItem(TEXT_STORAGE_KEY);
-            bgText.textContent = saved && saved.trim() ? saved : DEFAULT_QUOTE;
-        } catch {
-            bgText.textContent = DEFAULT_QUOTE;
-        }
+        bgText.textContent = DEFAULT_QUOTE;
         stopTextEdit();
     }
 });
@@ -649,7 +631,7 @@ window.addEventListener('resize', () => {
 });
 
 preRenderMascot();
-loadSavedQuote();
+resetQuoteToDefault();
 updateCanvasSize();
 initPhysics();
 

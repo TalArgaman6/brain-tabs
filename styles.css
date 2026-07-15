@@ -302,16 +302,6 @@ body {
     user-select: none;
 }
 
-.instructions {
-    font-size: clamp(0.72rem, 1.6vw, 0.88rem);
-    color: #666;
-    text-align: center;
-    font-weight: 500;
-    max-width: 520px;
-    line-height: 1.4;
-    user-select: none;
-}
-
 /* Tablet */
 @media (max-width: 900px) {
     .architectural-wall {
@@ -366,10 +356,6 @@ body {
         right: auto;
         bottom: 12px;
         transform: translateX(-50%) translateZ(50px);
-    }
-
-    .instructions {
-        padding: 0 8px 8px;
     }
 }
 
