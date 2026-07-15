@@ -38,6 +38,8 @@ let latchedBody = null;
 let pointerDown = { x: 0, y: 0, body: null };
 let quoteTapCount = 0;
 let quoteTapTimer = null;
+let lastLayoutWidth = 0;
+let lastLayoutHeight = 0;
 
 const MAX_TABS = 1500;
 const HOVER_STIFFNESS = 0.0014;
@@ -599,12 +601,13 @@ function updatePointerFromEvent(e) {
     pointer.active = true;
 }
 
-function initPhysics() {
-    World.clear(engine.world);
-    engine.world.gravity = { x: 0, y: 1.15 };
-    bodiesList = [];
-
+function createWalls() {
     const wallThickness = 120;
+
+    if (ground) {
+        World.remove(engine.world, [ground, leftWall, rightWall]);
+    }
+
     ground = Bodies.rectangle(width / 2, height + wallThickness / 2 - 4, width * 2, wallThickness, {
         isStatic: true,
         friction: 0.9
@@ -613,39 +616,86 @@ function initPhysics() {
     rightWall = Bodies.rectangle(width + wallThickness / 2, height / 2, wallThickness, height * 3, { isStatic: true });
 
     World.add(engine.world, [ground, leftWall, rightWall]);
+}
 
-    const isMobile = window.matchMedia('(max-width: 600px)').matches;
-    const initialCount = isMobile ? 120 : width < 900 ? 140 : 185;
-    for (let i = 0; i < initialCount; i += 1) {
-        spawnDuneMascot();
+function clearAllMascots() {
+    latchedBody = null;
+    for (let i = bodiesList.length - 1; i >= 0; i -= 1) {
+        World.remove(engine.world, bodiesList[i]);
     }
+    bodiesList = [];
+}
 
-    for (let i = 0; i < 40; i += 1) {
+function settleWorld(steps = 40) {
+    for (let i = 0; i < steps; i += 1) {
         Engine.update(engine, 1000 / 60);
     }
+}
+
+function seedMascots(count) {
+    for (let i = 0; i < count; i += 1) {
+        spawnDuneMascot(false);
+    }
+    settleWorld();
+    updateBadge();
+}
+
+function getDefaultMascotCount() {
+    const isMobile = window.matchMedia('(max-width: 600px)').matches;
+    return isMobile ? 120 : width < 900 ? 140 : 185;
+}
+
+function reflowMascotsPreservingCount() {
+    const savedCount = bodiesList.length;
+    clearAllMascots();
+    createWalls();
+    seedMascots(savedCount);
+}
+
+function handleViewportChange() {
+    updateCanvasSize();
+
+    const widthChanged = Math.abs(width - lastLayoutWidth) > 1;
+    const heightChanged = Math.abs(height - lastLayoutHeight) > 1;
+
+    if (!widthChanged && !heightChanged) return;
+
+    if (lastLayoutWidth > 0 && lastLayoutHeight > 0 && bodiesList.length > 0) {
+        reflowMascotsPreservingCount();
+    } else if (ground) {
+        createWalls();
+    }
+
+    lastLayoutWidth = width;
+    lastLayoutHeight = height;
+}
+
+function initPhysics() {
+    World.clear(engine.world);
+    engine.world.gravity = { x: 0, y: 1.15 };
+    bodiesList = [];
+    ground = null;
+    leftWall = null;
+    rightWall = null;
+    latchedBody = null;
+
+    createWalls();
+    seedMascots(getDefaultMascotCount());
 
     setupMouse();
     setupLatchInteraction();
-    updateBadge();
 }
 
 function updateCanvasSize() {
     const rect = interior.getBoundingClientRect();
-    width = rect.width;
-    height = rect.height;
+    width = Math.max(1, rect.width);
+    height = Math.max(1, rect.height);
     dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
-
-    if (ground) {
-        const wallThickness = 120;
-        Body.setPosition(ground, { x: width / 2, y: height + wallThickness / 2 - 4 });
-        Body.setPosition(leftWall, { x: -wallThickness / 2, y: height / 2 });
-        Body.setPosition(rightWall, { x: width + wallThickness / 2, y: height / 2 });
-    }
 }
 
 const renderCtx = canvas.getContext('2d');
@@ -838,16 +888,26 @@ bgText.addEventListener('keydown', (e) => {
 });
 
 let resizeTimer;
-window.addEventListener('resize', () => {
+window.addEventListener('resize', scheduleViewportReflow);
+window.addEventListener('orientationchange', scheduleViewportReflow);
+
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', scheduleViewportReflow);
+}
+
+const layoutObserver = new ResizeObserver(scheduleViewportReflow);
+layoutObserver.observe(interior);
+
+function scheduleViewportReflow() {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-        updateCanvasSize();
-    }, 120);
-});
+    resizeTimer = setTimeout(handleViewportChange, 150);
+}
 
 preRenderMascot();
 resetQuoteToDefault();
 updateCanvasSize();
+lastLayoutWidth = width;
+lastLayoutHeight = height;
 initPhysics();
 
 const runner = Runner.create();
