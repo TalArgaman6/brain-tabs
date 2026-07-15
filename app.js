@@ -90,7 +90,10 @@ function drawEye(ctx, ex, ey, ew, eh) {
     ctx.translate(ex, ey);
     ctx.beginPath();
     ctx.ellipse(0, 0, ew, eh, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#1a1a1a';
+    const eyeGrad = ctx.createRadialGradient(-ew * 0.2, -eh * 0.25, ew * 0.05, 0, 0, ew);
+    eyeGrad.addColorStop(0, '#3a3a3a');
+    eyeGrad.addColorStop(1, '#111111');
+    ctx.fillStyle = eyeGrad;
     ctx.fill();
     drawSparkle(ctx, ew * 0.28, -eh * 0.28, ew * 0.42, eh * 0.42);
     drawSparkle(ctx, -ew * 0.25, eh * 0.28, ew * 0.22, eh * 0.22);
@@ -114,21 +117,41 @@ function drawEyebrow(ctx, bx, by, isLeft) {
 
 function preRenderMascot() {
     const cx = SPRITE_SIZE / 2;
-    const cy = SPRITE_SIZE / 2;
+    const cy = SPRITE_SIZE / 2 + SPRITE_SIZE * 0.03;
     const r = SPRITE_SIZE * 0.42;
 
     spriteCtx.clearRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
     spriteCtx.save();
     spriteCtx.translate(cx, cy);
 
+    spriteCtx.save();
+    spriteCtx.scale(1, 0.28);
+    spriteCtx.beginPath();
+    spriteCtx.ellipse(0, r * 0.72, r * 0.62, r * 0.22, 0, 0, Math.PI * 2);
+    spriteCtx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+    spriteCtx.filter = 'blur(6px)';
+    spriteCtx.fill();
+    spriteCtx.filter = 'none';
+    spriteCtx.restore();
+
     pathMascot(spriteCtx, r);
-    spriteCtx.fillStyle = '#f5c842';
+    const yellowGrad = spriteCtx.createRadialGradient(-r * 0.28, -r * 0.42, r * 0.08, r * 0.08, r * 0.05, r * 1.05);
+    yellowGrad.addColorStop(0, '#ffe48a');
+    yellowGrad.addColorStop(0.42, '#f5c842');
+    yellowGrad.addColorStop(0.88, '#e0ad2a');
+    yellowGrad.addColorStop(1, '#c9921a');
+    spriteCtx.fillStyle = yellowGrad;
     spriteCtx.fill();
 
     spriteCtx.save();
     pathMascot(spriteCtx, r);
     spriteCtx.clip();
-    spriteCtx.fillStyle = '#ffffff';
+    const whiteGrad = spriteCtx.createLinearGradient(-r * 1.2, r * 1.2, r * 1.1, -r * 1.1);
+    whiteGrad.addColorStop(0, '#efefef');
+    whiteGrad.addColorStop(0.38, '#ffffff');
+    whiteGrad.addColorStop(0.72, '#f6f6f6');
+    whiteGrad.addColorStop(1, '#dcdcdc');
+    spriteCtx.fillStyle = whiteGrad;
     spriteCtx.beginPath();
     spriteCtx.moveTo(-r * 1.6, r * 1.6);
     spriteCtx.lineTo(-r * 0.55, r * 0.38);
@@ -139,11 +162,27 @@ function preRenderMascot() {
     spriteCtx.fill();
     spriteCtx.restore();
 
+    spriteCtx.save();
     pathMascot(spriteCtx, r);
-    spriteCtx.lineWidth = 4;
-    spriteCtx.strokeStyle = '#1a1a1a';
+    spriteCtx.clip();
+    const gloss = spriteCtx.createLinearGradient(-r * 0.5, -r * 0.8, r * 0.3, r * 0.2);
+    gloss.addColorStop(0, 'rgba(255, 255, 255, 0.42)');
+    gloss.addColorStop(0.55, 'rgba(255, 255, 255, 0.08)');
+    gloss.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    spriteCtx.fillStyle = gloss;
+    spriteCtx.fillRect(-r, -r, r * 2, r * 2);
+    spriteCtx.restore();
+
+    pathMascot(spriteCtx, r);
+    spriteCtx.lineWidth = 2.2;
+    spriteCtx.strokeStyle = 'rgba(35, 28, 18, 0.55)';
     spriteCtx.lineJoin = 'round';
     spriteCtx.lineCap = 'round';
+    spriteCtx.stroke();
+
+    pathMascot(spriteCtx, r);
+    spriteCtx.lineWidth = 1;
+    spriteCtx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
     spriteCtx.stroke();
 
     const fy = -r * 0.22;
@@ -158,8 +197,8 @@ function preRenderMascot() {
 
     spriteCtx.beginPath();
     spriteCtx.arc(0, fy + r * 0.06, r * 0.048, 0.15, Math.PI - 0.15);
-    spriteCtx.lineWidth = 2.4;
-    spriteCtx.strokeStyle = '#1a1a1a';
+    spriteCtx.lineWidth = 2;
+    spriteCtx.strokeStyle = 'rgba(30, 24, 16, 0.7)';
     spriteCtx.stroke();
 
     spriteCtx.restore();
@@ -410,7 +449,8 @@ function initPhysics() {
 
     World.add(engine.world, [ground, leftWall, rightWall]);
 
-    const initialCount = width < 600 ? 95 : width < 900 ? 140 : 185;
+    const isMobile = window.matchMedia('(max-width: 600px)').matches;
+    const initialCount = isMobile ? 120 : width < 900 ? 140 : 185;
     for (let i = 0; i < initialCount; i += 1) {
         spawnDuneMascot();
     }
@@ -453,10 +493,21 @@ function draw() {
         const body = bodiesList[i];
         const { x, y } = body.position;
         const r = body.customRadius;
+        const angle = body.angle;
+
+        renderCtx.save();
+        renderCtx.translate(x, y + r * 0.08);
+        renderCtx.rotate(angle);
+        renderCtx.scale(1, 0.22);
+        renderCtx.beginPath();
+        renderCtx.ellipse(0, 0, r * 0.72, r * 0.28, 0, 0, Math.PI * 2);
+        renderCtx.fillStyle = 'rgba(0, 0, 0, 0.09)';
+        renderCtx.fill();
+        renderCtx.restore();
 
         renderCtx.save();
         renderCtx.translate(x, y);
-        renderCtx.rotate(body.angle);
+        renderCtx.rotate(angle);
         renderCtx.drawImage(characterSprite, -r, -r, r * 2, r * 2);
         renderCtx.restore();
     }
@@ -471,7 +522,10 @@ let targetY = 0;
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function animateParallax() {
-    if (!prefersReducedMotion) {
+    const isMobile = window.matchMedia('(max-width: 600px)').matches;
+    const isLandscapeMobile = window.matchMedia('(max-width: 900px) and (orientation: landscape)').matches;
+
+    if (!prefersReducedMotion && !isMobile && !isLandscapeMobile) {
         currentX += (targetX - currentX) * 0.07;
         currentY += (targetY - currentY) * 0.07;
         galleryWall.style.transform = `rotateY(${currentX}deg) rotateX(${currentY}deg)`;

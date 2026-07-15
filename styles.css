@@ -320,42 +320,145 @@ body {
     }
 }
 
-/* Mobile */
+/* Mobile — fullscreen horizontal frame, no wall */
 @media (max-width: 600px) {
     body {
-        padding: 6px;
-        align-items: flex-start;
-        padding-top: clamp(12px, 3vh, 24px);
+        padding: 0;
+        align-items: stretch;
+        background: #fafafa;
     }
 
     .scene {
-        width: 100%;
-        gap: 8px;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        max-width: none;
+        gap: 0;
+        perspective: none;
     }
 
     .architectural-wall {
-        aspect-ratio: 1 / 1.05;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
         max-height: none;
-        padding: 16px 14px 56px;
+        aspect-ratio: unset;
+        padding: 0;
+        border: none;
+        background: #fafafa;
+        box-shadow: none;
+        border-radius: 0;
+        transform: none !important;
+    }
+
+    .wall-panel,
+    .window-sill,
+    .glass-pane,
+    .glass-shine {
+        display: none;
+    }
+
+    .window-frame {
+        width: 100%;
+        height: 100%;
+        transform: none;
     }
 
     .window-container {
-        aspect-ratio: 1.55 / 1;
-        min-height: clamp(200px, 52vw, 280px);
+        width: 100%;
+        height: 100%;
+        aspect-ratio: unset;
+        min-height: 0;
+        border: none;
+        background: #fafafa;
+        box-shadow: none;
+    }
+
+    .window-interior {
+        inset: 0;
+        background: #fafafa;
+        box-shadow: none;
     }
 
     .bg-text {
-        font-size: clamp(0.95rem, 4.8vw, 1.35rem);
-        top: 36%;
-        max-width: 94%;
+        font-size: clamp(0.85rem, 4.2vw, 1.25rem);
+        top: 38%;
+        max-width: 92%;
         white-space: normal;
     }
 
     .controls-container {
         left: 50%;
         right: auto;
-        bottom: 12px;
-        transform: translateX(-50%) translateZ(50px);
+        bottom: max(12px, env(safe-area-inset-bottom));
+        transform: translateX(-50%);
+        padding: 6px 12px;
+    }
+
+    .control-btn {
+        width: 34px;
+        height: 34px;
+        font-size: 1.2rem;
+    }
+}
+
+/* Mobile landscape — maximize wide frame */
+@media (max-width: 900px) and (orientation: landscape) {
+    body {
+        padding: 0;
+        background: #fafafa;
+    }
+
+    .scene {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+    }
+
+    .architectural-wall {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        max-height: none;
+        aspect-ratio: unset;
+        padding: 0;
+        border: none;
+        background: #fafafa;
+        box-shadow: none;
+        transform: none !important;
+    }
+
+    .wall-panel,
+    .window-sill,
+    .glass-pane,
+    .glass-shine {
+        display: none;
+    }
+
+    .window-frame,
+    .window-container {
+        width: 100%;
+        height: 100%;
+        aspect-ratio: unset;
+        min-height: 0;
+        border: none;
+        background: #fafafa;
+        box-shadow: none;
+        transform: none;
+    }
+
+    .window-interior {
+        inset: 0;
+    }
+
+    .bg-text {
+        font-size: clamp(1rem, 3.5vw, 1.6rem);
+        top: 40%;
+    }
+
+    .controls-container {
+        bottom: max(10px, env(safe-area-inset-right));
+        right: max(12px, env(safe-area-inset-right));
     }
 }
 
